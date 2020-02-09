@@ -1,0 +1,185 @@
+---
+title: "Assignment 1"
+author: 
+- Stephen Jones
+date: "February 2, 2020"
+output:
+  rmdformats::readthedown:
+    code_folding: hide
+    gallery: no
+    highlight: tango
+    lightbox: yes
+    thumbnails: no
+  html_document:
+    code_folding: hide
+    df_print: paged
+---  
+
+<style type="text/css">
+pre {
+  max-height: 150px;
+  float: left;
+  width: 100%;
+  overflow-y: auto;
+}
+pre.r {
+max-height: none;
+}
+h1.title {
+  color: DarkBlue;
+  font-weight: bold;
+}
+h1 { /* Header 1 */
+  color: DarkBlue;
+  font-weight: bold;
+}
+h2 { /* Header 2 */
+  color: DarkBlue;
+  font-weight: bold;
+}
+h3 { /* Header 3 */
+  color: DarkBlue;
+  font-weight: bold;
+}
+h4 { /* Header 3 */
+  color: DarkBlue;
+  font-weight: bold;
+}
+</style>
+
+**Principles of Data Visualization and Introduction to ggplot2**
+
+I have provided you with data about the 5,000 fastest growing companies in the US, as compiled by Inc. magazine. lets read this in:
+
+```{r}
+
+inc <- data.frame(read.csv("https://raw.githubusercontent.com/charleyferrari/CUNY_DATA_608/master/module1/Data/inc5000_data.csv", header= TRUE))
+
+```
+
+And lets preview this data:
+
+```{r}
+
+head(inc)
+
+```
+```{r}
+
+summary(inc)
+
+```
+
+Think a bit on what these summaries mean. Use the space below to add some more relevant non-visual exploratory information you think helps you understand this data:
+
+We'll use the package `noncensus` to add state region and division to the data.  
+
+```{r message=FALSE, warning=FALSE}
+
+if (!require(noncensus)) {
+  if (!require(devtools)) {
+    install.packages('devtools')
+    library(devtools)
+  }
+  devtools::install_github("ramhiser/noncensus")
+  library(noncensus)
+}
+
+data(states)
+
+names(states)[names(states)=='state'] <- 'State'
+
+newinc <- merge(inc,states, by='State')
+
+```
+
+
+```{r message=FALSE, warning=FALSE}
+
+aggregate(newinc[,c('Growth_Rate','Revenue', 'Rank')], list(newinc$region), mean)
+
+```
+
+
+## Question 1
+
+Create a graph that shows the distribution of companies in the dataset by State (ie how many are in each state). There are a lot of States, so consider which axis you should use. This visualization is ultimately going to be consumed on a 'portrait' oriented screen (ie taller than wide), which should further guide your layout choices.
+
+```{r message=FALSE, warning=FALSE, fig.align='center',fig.width=8,fig.height=8}
+
+state_freq <- data.frame(table(inc$State))
+names(state_freq) <- c('State','Count')
+
+library(ggplot2)
+ggplot(state_freq,aes(x=reorder(State, Count), y=Count))+
+  geom_bar(stat='identity', width = .80)+
+  theme_classic()+
+  theme(legend.position="none", 
+        axis.line=element_blank(),
+        axis.title.x=element_blank(),
+        axis.ticks=element_blank(),
+        axis.text.x=element_blank())+
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 750))+
+  geom_text(aes(label=Count), position=position_dodge(width=0.9), hjust=-0.25)+
+  coord_flip()+
+  labs(title="Frequency of Companies by State", x = "", y = "")
+
+```
+
+## Question 2
+
+Lets dig in on the state with the 3rd most companies in the data set. Imagine you work for the state and are interested in how many people are employed by companies in different industries. Create a plot that shows the average and/or median employment by industry for companies in this state (only use cases with full data, use R's `complete.cases()` function.) In addition to this, your graph should show how variable the ranges are, and you should deal with outliers.
+
+```{r message=FALSE, warning=FALSE, fig.align='center',fig.width=8,fig.height=6}
+
+ny <- data.frame(inc[which(inc$State == 'NY' & complete.cases(inc)),])
+
+ggplot(ny, aes(x=reorder(Industry, Employees), y=Employees))+
+  geom_boxplot(outlier.shape = NA, width = .90)+
+  geom_rect(aes(xmin=0, xmax=Inf, ymin=-Inf, ymax=250), alpha = 0.2, fill="#EFEFEF")+
+  geom_rect(aes(xmin=0, xmax=Inf, ymin=500, ymax=750), alpha = 0.2, fill="#EFEFEF")+
+  geom_boxplot(outlier.shape = NA, width = .90)+
+  stat_summary(fun.y=mean, geom="point", shape=5, size=2, color="black", fill="white")+
+  theme_classic()+
+  theme(legend.position="none", 
+        axis.line=element_blank(),
+        axis.title.x=element_blank(),
+        axis.ticks=element_blank())+
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 995))+
+  #geom_text(aes(label=Count), position=position_dodge(width=0.9), hjust=-0.25)+
+  coord_flip()+
+  labs(title="Number of Employees, New York", x = "", y = "", caption = "Diamonds represent mean values, outliers omitted\n Industries are listed in descending order of number of total employees")
+
+```
+
+## Question 3
+
+Now imagine you work for an investor and want to see which industries generate the most revenue per employee. Create a chart that makes this information clear. Once again, the distribution per industry should be shown.
+
+```{r message=FALSE, warning=FALSE, fig.align='center',fig.width=8}
+
+library(dplyr)
+nyRev <- ny %>%
+  group_by(Industry) %>%
+  summarize(Employee_sum = sum(Employees, na.rm = TRUE),
+            Revenue_sum = sum(Revenue, na.rm = TRUE))
+
+
+nyRev$RevPerEmp <- round(nyRev$Revenue_sum/(1000*nyRev$Employee_sum),0)
+
+ggplot(nyRev,aes(x=reorder(Industry, RevPerEmp), y=RevPerEmp))+
+  geom_bar(stat='identity', width = .90)+
+  theme_classic()+
+  theme(legend.position="none", 
+        axis.line=element_blank(),
+        axis.title.x=element_blank(),
+        axis.ticks=element_blank(),
+        axis.text.x=element_blank())+
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 720))+
+  geom_text(aes(label=paste0(RevPerEmp,"K")), position=position_dodge(width=0.9), hjust=-0.25)+
+  coord_flip()+
+  labs(title="Revenue Per Employee", x = "", y = "")
+
+```
+
+
