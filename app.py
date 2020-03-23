@@ -1,6 +1,6 @@
 
 import os
-import urllib
+
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -10,17 +10,19 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import rc
 
-import math
 import seaborn as sns
 
 import pandas as pd
 import numpy as np
 
 import plotly.graph_objs as go
+import flask
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+server = flask.Flask(__name__)
+
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets,server=server)
 
 
 all_url = ('https://data.cityofnewyork.us/resource/nwxe-4ae8.json?' +\
@@ -64,11 +66,20 @@ app.layout = html.Div([
               , className="row", style={"padding": 50, "width": "60%", "margin-left": "auto", "margin-right": "auto"}),
     html.Div([html.Div([
         #html.H3('Column 1'),
-        dcc.Graph(id='my-graph2')
+        dcc.Graph(id='my-graph')
     ], className="six columns"),
     html.Div([
         #html.H3('Column 2'),
-        dcc.Graph(id='my-graph'),
+        dcc.Graph(id='my-graph2'),
+    ], className="six columns"),
+    ], className = "row"),
+    html.Div([html.Div([
+        #html.H3('Column 2'),
+        dcc.Graph(id='my-graph4'),
+    ], className="six columns"),
+    html.Div([
+        #html.H3('Column 2'),
+        dcc.Graph(id='my-graph3'),
     ], className="six columns")
     ], className = "row")
 
@@ -186,7 +197,7 @@ def update_graph2(product_selected1, product_selected2):
         'layout': go.Layout(
 
             barmode = 'stack',
-            showlegend=False,
+            #showlegend=False,
   
             title=f'Stewardship, all species in {product_selected1}',
             xaxis={'title': "Stewardship Observed", 'titlefont': {'color': 'black', 'size': 14},
@@ -195,7 +206,108 @@ def update_graph2(product_selected1, product_selected2):
 
         )
     }
+
+@app.callback(
+
+    dash.dependencies.Output('my-graph3', 'figure'),
+    [dash.dependencies.Input('product-selected2', 'value'),
+    dash.dependencies.Input('product-selected1','value')])
+
+
+def update_graph3(product_selected1, product_selected2):
+
+    #boro = product_selected1
+
+    tree_sel = product_selected2
+
+    urlb = ('https://data.cityofnewyork.us/resource/nwxe-4ae8.json?$select=steward,health,count(health)' +\
+        '&$where=spc_common=\''+tree_sel+'\''+\
+        '&$group=steward,health').replace(' ', '%20')
+
+    trees2b = pd.read_json(urlb)
+    trees2b['count_health'] = pd.to_numeric(trees2b['count_health'])
+    trees2b = trees2b[trees2b['count_health']!=0]
+
+    #selects major type of species
+    #trees3 = trees2[trees2['spc_common'].str.contains(tree_sel,na=False)]
+
+    trees2b['pct'] = round(trees2b['count_health']*100/(trees2b['count_health'].sum()),2)
+    contingency_tableb = trees2b.pivot(index='steward',
+                                     columns='health',
+                                     values='pct')
+    column_orderb = ['Poor','Fair','Good']
+
+    con_tableb = contingency_tableb.reindex(column_orderb, axis=1)
+    con_tableb = con_tableb.div(con_tableb.sum(axis=1), axis=0)
+    #con_table = round(con_table*100,2)
+    
+    con_tableb = con_tableb.reset_index()
+
+
+    #trace2 = go.Pie(labels=trees3['health'],values=trees3['pct'])
+    trace7 = go.Bar(x=con_tableb['steward'],y=con_tableb['Poor'],name='Poor')
+    trace6 = go.Bar(x=con_tableb['steward'],y=con_tableb['Fair'],name='Fair')
+    trace5 = go.Bar(x=con_tableb['steward'],y=con_tableb['Good'],name='Good')
+    
+
+    return {
+        'data': [trace5,trace6,trace7],
+        'layout': go.Layout(
+
+            barmode = 'stack',
+            #showlegend=False,
+  
+            title=f'Stewardship, {product_selected2} in all Boroughs',
+            xaxis={'title': "Stewardship Observed", 'titlefont': {'color': 'black', 'size': 14},
+            'tickfont': {'size': 12, 'color': 'black'}},
+            yaxis={'tickfont': {'color': 'black'}, 'tickformat':"%"}
+
+        )
+    }
+
+@app.callback(
+
+    dash.dependencies.Output('my-graph4', 'figure'),
+    [dash.dependencies.Input('product-selected2', 'value'),
+    dash.dependencies.Input('product-selected1','value')])
+
+
+def update_graph4(product_selected1, product_selected2):
+
+    boro = product_selected1
+
+    #tree_sel = product_selected2
+
+    urlt = ('https://data.cityofnewyork.us/resource/nwxe-4ae8.json?$select=spc_common,health,count(health)' +\
+        '&$where=boroname=\''+boro+'\''+\
+        '&$group=spc_common,health').replace(' ', '%20')
+
+    trees2t = pd.read_json(urlt)
+    trees2t['count_health'] = pd.to_numeric(trees2t['count_health'])
+    trees2t = trees2t[trees2t['count_health']!=0]
+
+    trees3t = trees2t.sort_values('count_health',ascending=False)
+    trees4t = trees3t.head(5)
+
+    trace8 = go.Bar(x=trees4t['count_health'],y=trees4t['spc_common'],orientation='h')
+    
+
+    return {
+        'data': [trace8],
+        'layout': go.Layout(
+
+            #barmode = 'stack',
+            showlegend=False,
+  
+            title=f'Top Five Most Populous Species in {product_selected1}',
+            xaxis={'title': "Count", 'titlefont': {'color': 'black', 'size': 14},
+            'tickfont': {'size': 12, 'color': 'black'}},
+            yaxis={'title':"Species",'titlefont': {'color': 'black', 'size': 14},'tickfont': {'size':8,'color': 'black'}}
+
+        )
+    }
     
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run_server(host='0.0.0.0',port=port)
